@@ -21,16 +21,9 @@ type Subject struct {
 // Observer basic observer type
 type Observer struct {
 	Chnl    chan Event
-	Handler func(Event)
-}
-
-// Process waits on channel and passes event to handler
-func (o *Observer) Process() {
-	go func() {
-		for n := range o.Chnl {
-			o.Handler(n)
-		}
-	}()
+	Handler func(Event, string, []string)
+	Cmd     string
+	Flags   []string
 }
 
 // NewSubject creates a new subject
@@ -59,4 +52,13 @@ func (s *Subject) NotifyObservers(event string, payload Event) error {
 	}
 
 	return nil
+}
+
+// Process waits on channel and passes event to handler
+func (o *Observer) Process() {
+	go func() {
+		for n := range o.Chnl {
+			o.Handler(n, o.Cmd, o.Flags)
+		}
+	}()
 }
