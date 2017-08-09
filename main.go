@@ -27,7 +27,7 @@ func parseCmdAction(device, action string, cfg *config.Config) (string, []string
 	// get the global flags
 	gFlags, err := cfg.List(fmt.Sprintf("%s.common_flags", device))
 	if err != nil {
-		panic("Failed to parse common flags")
+		fmt.Printf("No common flags for: %s\n", device)
 	}
 
 	// get the action flags
@@ -83,20 +83,26 @@ func main() {
 	subject := Observer.NewSubject()
 
 	// create ghost observer to wait for the message
-	// ghost := Observer.Observer{
-	// 	Chnl: subject.AddObserver("text"),
-	// 	Handler: func(event Observer.Event) {
-	// 		messageEvent, ok := event.(Observer.MessageEvent)
-	// 		if ok {
-	// 			fmt.Printf("Ghost got this message: %s\n", messageEvent.Message)
-	// 		}
-	// 	},
-	// 	Cmd: parseCmdAction("ghost", "text", cfg),
-	// }
-	// ghost.Process()
+	cmd, flags := parseCmdAction("ghost", "text", cfg)
+	ghost := Observer.Observer{
+		Chnl: subject.AddObserver("text"),
+		Handler: func(event Observer.Event, cmdPath string, flags []string) {
+			_, ok := event.(Observer.MessageEvent)
+			if ok {
+				cmd := exec.Command(cmdPath, flags...)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					fmt.Printf("ghost failed: %s\n", output)
+					os.Exit(1)
+				}
+			}
+		},
+		Cmd:   cmd,
+		Flags: flags,
+	}
+	ghost.Process()
 
 	// create the storm trooper observer
-	cmd, flags := parseCmdAction("storm", "text", cfg)
+	cmd, flags = parseCmdAction("storm", "text", cfg)
 	storm := Observer.Observer{
 		Chnl: subject.AddObserver("text"),
 		Handler: func(event Observer.Event, cmdPath string, flags []string) {
@@ -104,7 +110,7 @@ func main() {
 			if ok {
 				cmd := exec.Command(cmdPath, flags...)
 				if output, err := cmd.CombinedOutput(); err != nil {
-					fmt.Printf("output: %s\n", output)
+					fmt.Printf("stormtrooper failed: %s\n", output)
 					os.Exit(1)
 				}
 			}
