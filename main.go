@@ -54,6 +54,24 @@ func parseCmdAction(device, action string, cfg *config.Config) (string, []string
 	return path, allFlags
 }
 
+func newCmdLineObserver(device, action string, subject *Observer.Subject, cfg *config.Config) *Observer.Observer {
+	cmd, flags := parseCmdAction(device, action, cfg)
+	return &Observer.Observer{
+		Chnl: subject.AddObserver(action),
+		Handler: func(event Observer.Event, cmdPath string, flags []string) {
+			_, ok := event.(Observer.MessageEvent)
+			if ok {
+				cmd := exec.Command(cmdPath, flags...)
+				if output, err := cmd.CombinedOutput(); err != nil {
+					fmt.Printf("%s failed: %s\n", device, output)
+				}
+			}
+		},
+		Cmd:   cmd,
+		Flags: flags,
+	}
+}
+
 func handleRequests(subject *Observer.Subject) {
 	router := mux.NewRouter()
 	router.HandleFunc(
@@ -61,6 +79,13 @@ func handleRequests(subject *Observer.Subject) {
 		func(w http.ResponseWriter, req *http.Request) {
 			msg := Observer.MessageEvent{Message: "received"}
 			subject.NotifyObservers("text", msg)
+		},
+	).Methods("POST")
+	router.HandleFunc(
+		"/notify/default",
+		func(w http.ResponseWriter, req *http.Request) {
+			msg := Observer.MessageEvent{Message: "received"}
+			subject.NotifyObservers("default", msg)
 		},
 	).Methods("POST")
 
@@ -83,42 +108,16 @@ func main() {
 	subject := Observer.NewSubject()
 
 	// create ghost observer to wait for the message
-	cmd, flags := parseCmdAction("ghost", "text", cfg)
-	ghost := Observer.Observer{
-		Chnl: subject.AddObserver("text"),
-		Handler: func(event Observer.Event, cmdPath string, flags []string) {
-			_, ok := event.(Observer.MessageEvent)
-			if ok {
-				cmd := exec.Command(cmdPath, flags...)
-				if output, err := cmd.CombinedOutput(); err != nil {
-					fmt.Printf("ghost failed: %s\n", output)
-					os.Exit(1)
-				}
-			}
-		},
-		Cmd:   cmd,
-		Flags: flags,
-	}
-	ghost.Process()
+	ghostText := newCmdLineObserver("ghost", "text", subject, cfg)
+	ghostDefault := newCmdLineObserver("ghost", "default", subject, cfg)
+	ghostText.Process()
+	ghostDefault.Process()
 
 	// create the storm trooper observer
-	cmd, flags = parseCmdAction("storm", "text", cfg)
-	storm := Observer.Observer{
-		Chnl: subject.AddObserver("text"),
-		Handler: func(event Observer.Event, cmdPath string, flags []string) {
-			_, ok := event.(Observer.MessageEvent)
-			if ok {
-				cmd := exec.Command(cmdPath, flags...)
-				if output, err := cmd.CombinedOutput(); err != nil {
-					fmt.Printf("stormtrooper failed: %s\n", output)
-					os.Exit(1)
-				}
-			}
-		},
-		Cmd:   cmd,
-		Flags: flags,
-	}
-	storm.Process()
+	stormText := newCmdLineObserver("storm", "text", subject, cfg)
+	stormDefault := newCmdLineObserver("storm", "default", subject, cfg)
+	stormText.Process()
+	stormDefault.Process()
 
 	handleRequests(subject)
 }
