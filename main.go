@@ -81,6 +81,14 @@ func handleRequests(subject *Observer.Subject) {
 			subject.NotifyObservers("text", msg)
 		},
 	).Methods("POST")
+	route.HandleFunc(
+		"/notify/phone/call/missed",
+		func(w http.ResponseWriter, req *http.Request) {
+			// TODO: change this to use CallEvent
+			msg := Observer.MessageEvent{Message: "missed call"}
+			subject.NotifyObservers("missed", msg)
+		},
+	).Methods("POST")
 	router.HandleFunc(
 		"/notify/default",
 		func(w http.ResponseWriter, req *http.Request) {
