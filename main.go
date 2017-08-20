@@ -81,7 +81,8 @@ func handleRequests(subject *Observer.Subject) {
 			subject.NotifyObservers("text", msg)
 		},
 	).Methods("POST")
-	route.HandleFunc(
+
+	router.HandleFunc(
 		"/notify/phone/call/missed",
 		func(w http.ResponseWriter, req *http.Request) {
 			// TODO: change this to use CallEvent
@@ -89,6 +90,7 @@ func handleRequests(subject *Observer.Subject) {
 			subject.NotifyObservers("missed", msg)
 		},
 	).Methods("POST")
+
 	router.HandleFunc(
 		"/notify/default",
 		func(w http.ResponseWriter, req *http.Request) {
@@ -112,20 +114,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	// get the toplevel list of devices
+	var devices map[string]interface{}
+	devices, err = cfg.Map("")
+	if err != nil {
+		fmt.Printf("Unable to parse the top level list of devices")
+		os.Exit(1)
+	}
+
 	// create the subject with single channel
 	subject := Observer.NewSubject()
 
-	// create ghost observer to wait for the message
-	ghostText := newCmdLineObserver("ghost", "text", subject, cfg)
-	ghostDefault := newCmdLineObserver("ghost", "default", subject, cfg)
-	ghostText.Process()
-	ghostDefault.Process()
+	// iterate through each device and create associated observer(s)
+	var observers []*Observer.Observer
+	for device := range devices {
+		actionMap, err := cfg.Map(fmt.Sprintf("%s.actions", device))
+		if err != nil {
+			fmt.Printf("Unable to parse actions for %s\n", device)
+		}
 
-	// create the storm trooper observer
-	stormText := newCmdLineObserver("storm", "text", subject, cfg)
-	stormDefault := newCmdLineObserver("storm", "default", subject, cfg)
-	stormText.Process()
-	stormDefault.Process()
+		for action := range actionMap {
+			newobs := newCmdLineObserver(device, action, subject, cfg)
+			observers = append(observers, newobs)
+		}
+	}
+
+	// start the observers
+	for _, obs := range observers {
+		obs.Process()
+	}
 
 	handleRequests(subject)
 }
